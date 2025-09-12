@@ -1,0 +1,181 @@
+paths:
+  /api/friends/action:
+    post:
+      summary: Thực hiện hành động bạn bè (send, accept, reject, unfriend, follow, unfollow)
+      tags:
+        - Friend
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FriendActionRequest'
+      responses:
+        '200':
+          description: Thành công
+        '201':
+          description: Gửi lời mời thành công
+        '400':
+          description: Thiếu dữ liệu hoặc lỗi logic
+        '500':
+          description: Lỗi server
+
+  /api/friends:
+    get:
+      summary: Lấy dữ liệu bạn bè (friends | requests | suggestions | following | followers)
+      tags:
+        - Friend
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [friends, requests, suggestions, following, followers]
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Dữ liệu bạn bè trả về theo loại
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Friend'
+                  
+        '400':
+          description: type không hợp lệ
+        '401':
+          description: Chưa xác thực
+        '500':
+          description: Lỗi server
+
+  /api/friends/mutual-friends-batch:
+    post:
+      summary: Lấy danh sách bạn chung theo mảng targetIds
+      tags:
+        - Friend
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                targetIds:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Danh sách bạn chung
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MutualFriendsResponse'
+        '400':
+          description: Dữ liệu không hợp lệ
+        '500':
+          description: Lỗi server
+
+  /api/friends/search:
+    get:
+      tags:
+        - Friend
+      summary: Tìm kiếm bạn bè theo từ khóa
+      description: Tìm kiếm bạn bè dựa trên từ khóa, yêu cầu xác thực JWT.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: keyword
+          in: query
+          description: Từ khóa tìm kiếm
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Thành công, trả về danh sách bạn bè tìm thấy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchFriendsResponse'
+        '400':
+          description: Từ khóa tìm kiếm không hợp lệ
+        '401':
+          description: Không xác thực token
+        '500':
+          description: Lỗi server
+
+components:
+  schemas:
+    Friend:
+      type: object
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+        avatar:
+          type: string
+          format: uri
+        background:
+          type: string
+          format: uri
+        verified:
+          type: boolean
+    FriendActionRequest:
+      type: object
+      required:
+        - action
+        - recipientId
+      properties:
+        type:
+          type: string
+          enum: [send, accept, reject, unfriend, follow, unfollow]
+        targetId:
+          type: string
+          description: ID người dùng mục tiêu
+    MutualFriendsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        mutualFriends:
+          type: array
+          items:
+            type: object
+            properties:
+              userId:
+                type: string
+                example: "684e1f5935836507aee0f32"
+              mutuals:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Friend'
+    SearchFriendsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Friend'                    
+               
+        
