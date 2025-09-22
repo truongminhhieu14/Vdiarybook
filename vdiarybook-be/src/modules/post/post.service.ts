@@ -396,6 +396,24 @@ class PostService {
         },
       },
       {
+        $lookup: {
+          from: "posts",
+          localField: "originalPost",
+          foreignField: "_id",
+          as: "originalPost",
+        },
+      },
+      { $unwind: { path: "$originalPost", preserveNullAndEmptyArrays: true} },
+      {
+        $lookup: {
+          from: "users",
+          localField: "originalPost.author",
+          foreignField: "_id",
+          as: "originalPost.author",
+        },
+      },
+      { $unwind: { path: "$originalPost.author", preserveNullAndEmptyArrays: true } },
+      {
         $project: {
           author: {
             email: 0,
@@ -441,61 +459,155 @@ async getRandomFeeds({
 }) {
   if (!Types.ObjectId.isValid(userId)) throw new Error("Invalid user id");
 
-  // lấy danh sách following và friends
   const following_user_ids = await getFollowing(userId);
-  const followingIds = following_user_ids.data.map((item: any) => item.recipient._id);
+  const followingIds = following_user_ids.data.map(
+    (item: any) => item.recipient._id
+  );
 
   const friends_user_ids = await getFriendsList(userId);
   const friendIds = (friends_user_ids.data || [])
     .map((friend: any) => friend?._id?.toString())
     .filter(Boolean);
 
-  const ids = [...new Set([...followingIds, ...friendIds, userId.toString()])];
+  const ids = [
+    ...new Set([...followingIds, ...friendIds, userId.toString()])
+  ].map((id) => new Types.ObjectId(id));
 
-  // Lấy toàn bộ post thỏa điều kiện (KHÔNG skip, limit ở query)
-  const rawPosts = await Post.find({
-    author: { $in: ids.map((id) => new Types.ObjectId(id)) },
-    $or: [
-      { privacy: "public" },
-      { $and: [{ privacy: "private" }, { author: new Types.ObjectId(userId) }] },
-      {
-        $and: [
-          { privacy: "friends" },
-          { author: { $in: friendIds.map((id) => new Types.ObjectId(id)) } }
+  const rawPosts = await Post.aggregate<IPost>([
+    {
+      $match: {
+        author: { $in: ids },
+        $or: [
+          { privacy: "public" },
+          { $and: [{ privacy: "private" }, { author: new Types.ObjectId(userId) }] },
+          {
+            $and: [
+              { privacy: "friends" },
+              { author: { $in: friendIds.map((id) => new Types.ObjectId(id)) } }
+            ]
+          }
         ]
       }
-    ]
-  })
-    .populate("author", "-password -email -role")
-    .populate("postedOn")
-    .populate("hashtags")
-    .populate("mentions", "_id username email")
-    .lean();
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "author",
+        foreignField: "_id",
+        as: "author"
+      }
+    },
+    { $unwind: "$author" },
+    {
+      $lookup: {
+        from: "users",
+        localField: "postedOn",
+        foreignField: "_id",
+        as: "postedOn"
+      }
+    },
+    { $unwind: { path: "$postedOn", preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: "hashtags",
+        localField: "hashtags",
+        foreignField: "_id",
+        as: "hashtags"
+      }
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "mentions",
+        foreignField: "_id",
+        as: "mentions"
+      }
+    },
+    {
+      $addFields: {
+        mentions: {
+          $map: {
+            input: "$mentions",
+            as: "mention",
+            in: {
+              _id: "$$mention._id",
+              username: "$$mention.username",
+              email: "$$mention.email"
+            }
+          }
+        }
+      }
+    },
+    {
+      $lookup: {
+        from: "comments",
+        localField: "_id",
+        foreignField: "post_id",
+        as: "comments"
+      }
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "likes",
+        foreignField: "_id",
+        as: "likes"
+      }
+    },
+    {
+      $addFields: {
+        likes: { $size: "$likes" },
+        comments: { $size: "$comments" }
+      }
+    },
+    {
+      $lookup: {
+        from: "posts",
+        localField: "originalPost",
+        foreignField: "_id",
+        as: "originalPost"
+      }
+    },
+    { $unwind: { path: "$originalPost", preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: "users",
+        localField: "originalPost.author",
+        foreignField: "_id",
+        as: "originalPost.author"
+      }
+    },
+    { $unwind: { path: "$originalPost.author", preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        author: {
+          password: 0,
+          email: 0,
+          role: 0
+        }
+      }
+    }
+  ]);
 
   const total = rawPosts.length;
-
   if (!total) {
     return { posts: [], total, page, limit };
   }
 
-  // Tính max engagement để normalize
   const maxValues = {
     engagement: Math.max(
-      ...rawPosts.map((p: any) => (p.likes?.length || 0) + (p.comments?.length || 0)),
+      ...rawPosts.map((p: any) => (p.likes || 0) + (p.comments || 0)),
       1
     )
   };
 
-  // Thêm weight cho từng post
   const postsWithWeight = rawPosts.map((post: any) => ({
     ...post,
     weight: calculateWeight(post, maxValues, userId)
   }));
 
-  // Random toàn bộ danh sách
   const randomized = weightRandom(postsWithWeight, total);
 
-  // Phân trang trên mảng đã random
   const start = (page - 1) * limit;
   const end = start + limit;
   const pagedPosts = randomized.slice(start, end);
@@ -505,6 +617,7 @@ async getRandomFeeds({
     total
   };
 }
+
 
 
 }

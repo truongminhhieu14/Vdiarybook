@@ -15,6 +15,7 @@ import { Post } from './modules/post/post.model';
 import { Notification } from './modules/notification/notification.model';
 import { initFolder } from './utils/file';
 import { Message } from './modules/message/message.model';
+import { Conversation } from './modules/conversation/conversation.model';
 
 dotenv.config();
 
@@ -125,6 +126,10 @@ io.on('connection', (socket) => {
   socket.on("send-message", async (msg) => {
     const { conversation, senderId, receiverId } = msg
     const resend_msg = await Message.create(msg)
+    await Conversation.findByIdAndUpdate(conversation, {
+    last_message: resend_msg._id,
+    updatedAt: new Date()
+  });
     if (users[senderId]) {
       io.to(users[senderId].socketid).emit("resend-message", resend_msg);
     }

@@ -45,7 +45,7 @@ const ProfilePosts = ({ newPost, profileUserId }: ProfilePostsProps) => {
         res = await postApi.getAllPostOfUser(profileUserId, pageNum, 10);
 
       }else {
-        res = await postApi.getNewFeed(pageNum, 10)
+        res = await postApi.getRandomFeed(pageNum, 10)
       }
       const feedList = res.data.posts || []
       const hasMore = res.data?.hasMore || false;

@@ -27,12 +27,14 @@ export default function CreatePostModal({
   const [previewImages, setPreviewImages] = useState<string[]>([]);
   const [selectedVideos, setSelectedVideos] = useState<File[]>([]);
   const [previewVideos, setPreviewVideos] = useState<string[]>([]);
-  const [caption, setCaption] = useState("");
+  const [caption, setCaption] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [privacy, setPrivacy] = useState<"public" | "friends" | "private">(
     "public"
   );
   const [links, setLinks] = useState<LinkMeta[]>([]);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [loadingCaption, setLoadingCaption] = useState(false);
 
   const currentUserId = useSelector((state: RootState) => state.auth.user?._id);
   const dispatch = useDispatch();
@@ -139,6 +141,30 @@ export default function CreatePostModal({
       setLoading(false);
     }
   };
+  const handleSuggestCaptions = async () => {
+  try {
+    setLoadingCaption(true);
+    const res = await fetch("/api/captions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: caption || "Bài viết mới",
+        tone: "trendy",
+        language: "vi",
+        numberOfCaptions: 3,
+      }),
+    });
+    const data = await res.json();
+    if (data.success) {
+       const flatCaptions = data.captions.flat();
+      setSuggestions(flatCaptions);
+    }
+  } catch (err) {
+    console.error("Gợi ý caption thất bại:", err);
+  } finally {
+    setLoadingCaption(false);
+  }
+};
 
   if (!open) return null;
 
@@ -177,6 +203,36 @@ export default function CreatePostModal({
             value={caption}
             onChange={(e) => setCaption(e.target.value)}
           />
+
+          <div className="flex items-center gap-2 mb-2">
+  <button
+    type="button"
+    onClick={handleSuggestCaptions}
+    className="text-sm px-3 py-1 bg-gray-100 rounded hover:bg-gray-200"
+    disabled={loadingCaption}
+  >
+    {loadingCaption ? "Đang gợi ý..." : "Gợi ý caption"}
+  </button>
+</div>
+
+{suggestions.length > 0 && (
+  <ul className="space-y-2 mb-4">
+    {suggestions.map((s, i) => (
+      <li
+        key={i}
+        className="p-2 border rounded cursor-pointer hover:bg-blue-50"
+        onClick={() => setCaption(s.text || "")}
+      >
+        <p className="text-sm">{s.text} {s.emoji && <span>{s.emoji}</span>}</p>
+        {s.hashtags && (
+          <p className="text-xs text-gray-500">
+            {s.hashtags.join(" ")}
+          </p>
+        )}
+      </li>
+    ))}
+  </ul>
+)}
 
           {links.length > 0 && (
             <ul className="mb-4 space-y-2">

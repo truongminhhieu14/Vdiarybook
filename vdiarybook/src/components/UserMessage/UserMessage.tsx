@@ -1,5 +1,3 @@
-
-
 type Props = {
   className?: string;
   userName: string;

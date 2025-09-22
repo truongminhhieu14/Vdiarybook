@@ -34,6 +34,20 @@ class ConversationService {
             }
         },
         {
+            $lookup: {
+                from: "messages", // Join sang messages để lấy last_message
+                localField: "last_message",
+                foreignField: "_id",
+                as: "last_message"
+            }
+        },
+        {
+            $unwind: {
+                path: "$last_message",
+                preserveNullAndEmptyArrays: true
+            }
+        },
+        {
             $addFields: {
                 // Lọc ra những người tham gia không phải bạn
                 other_participants: {

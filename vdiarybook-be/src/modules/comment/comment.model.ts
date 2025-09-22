@@ -9,7 +9,6 @@ export interface IComment extends Document {
     likes: string[]
 }
 
-
 const commentSchema = new Schema<IComment>(
     {
         text: {type: String, require: true},
